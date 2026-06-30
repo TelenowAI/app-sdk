@@ -43,8 +43,9 @@ jobs:
           fi
           echo "Publishing @telenow/app@$PKG"
 
-      # access:public + provenance:true come from package.json publishConfig.
+      # --provenance only here (it needs CI OIDC); access:public is in publishConfig.
+      # A local `npm publish` therefore works too (just without the provenance badge).
       - name: Publish to npm
-        run: npm publish
+        run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

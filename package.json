@@ -61,8 +61,7 @@
     "url": "https://github.com/TelenowAI/app-sdk/issues"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "peerDependencies": {
     "react": ">=18",
