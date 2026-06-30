@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
       - name: Type-check + build (tsc)
         run: npm run build
-      - name: Smoke-test the CLI
-        run: node bin/telenow.mjs --help
+      - name: Smoke-test the CLI (loads + prints its usage banner)
+        run: node bin/telenow.mjs --help 2>&1 | grep -q "telenow build"
       - name: Pack (verify the published tarball contents)
         run: npm pack --dry-run
