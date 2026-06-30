@@ -1,4 +1,4 @@
-# @telenow/app
+# telenow
 
 SDK for building **installable apps** on the Telenow App Platform — like a Shopify app or a WordPress plugin, but for the Telenow voice AI dashboard and agent.
 
@@ -6,7 +6,7 @@ An app declares a **manifest** (`telenow.app.json`) describing its data objects,
 
 It does three things:
 
-1. **A React dashboard UI** — build any UI you want with React; it renders inside the Telenow dashboard (sidebar menu + page) in a sandboxed iframe. `@telenow/app/react` gives you `useObjects()` and friends; `telenow build` packages it.
+1. **A React dashboard UI** — build any UI you want with React; it renders inside the Telenow dashboard (sidebar menu + page) in a sandboxed iframe. `telenow/react` gives you `useObjects()` and friends; `telenow build` packages it.
 2. **Verifies signed requests** — the platform signs every agent tool call and event webhook with `X-Telenow-Signature: sha256=<hex>` (HMAC-SHA256 over the raw body).
 3. **Reads/writes your app's data** via the scoped **Data API** — your per-install app key is bound to one `(org, app)`, so you can never touch another tenant's or app's data.
 
@@ -26,7 +26,7 @@ Your app can contribute pages to the Telenow dashboard. Declare them in the mani
 
 ```tsx
 // ui/App.tsx
-import { useObjects, useTelenowContext } from '@telenow/app/react';
+import { useObjects, useTelenowContext } from 'telenow/react';
 
 export default function App() {
   const { page } = useTelenowContext();                 // which page the user opened
@@ -38,7 +38,7 @@ export default function App() {
 
 ```tsx
 // ui/index.tsx
-import { mount } from '@telenow/app/react';
+import { mount } from 'telenow/react';
 import App from './App';
 mount(App);
 ```
@@ -55,7 +55,7 @@ Your UI gets more than data access — each capability is gated by a **scope** y
 import {
   useUser, useAgents, useCall, useWhatsapp,
   useSoftphone, useSession, useHttp,
-} from '@telenow/app/react';
+} from 'telenow/react';
 
 const { user, can } = useUser();              // identity + RBAC (user:profile for name/email)
 const { agents } = useAgents();               // agents:read
@@ -102,7 +102,7 @@ await fetch({
 **Backend identity** — if your app has its own server, `useSession().token()` mints a short-lived JWT (signed with your signing secret, `aud: app:<id>`). Verify it on your backend:
 
 ```ts
-import { verifyAppToken } from '@telenow/app';
+import { verifyAppToken } from 'telenow';
 const claims = verifyAppToken(token, SIGNING_SECRET, 'my-app'); // { sub, org_id, role, … }
 ```
 
@@ -125,14 +125,14 @@ npx telenow build             # validate, bundle the React UI, → <appId>-<vers
 Node 18+. Zero runtime dependencies.
 
 ```bash
-npm install @telenow/app
+npm install telenow
 ```
 
 ## Quickstart (Express)
 
 ```ts
 import express from 'express';
-import { verifySignature, DataClient, type ToolCallRequest, type EventRequest } from '@telenow/app';
+import { verifySignature, DataClient, type ToolCallRequest, type EventRequest } from 'telenow';
 
 const SIGNING_SECRET = process.env.TELENOW_SIGNING_SECRET!; // from the app's "signing secret" in the dashboard
 const APP_KEY = process.env.TELENOW_APP_KEY!;               // a per-install app key you minted

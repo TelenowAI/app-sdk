@@ -1,4 +1,4 @@
-// @telenow/app/browser — the in-dashboard runtime for an app's React UI.
+// telenow/browser — the in-dashboard runtime for an app's React UI.
 //
 // Your built UI runs inside a SANDBOXED iframe in the Telenow dashboard. It has
 // no auth token and cannot reach the API directly; instead the dashboard

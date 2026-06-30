@@ -1,4 +1,4 @@
-# Releasing `@telenow/app`
+# Releasing `telenow`
 
 Publishing is automated by [`.github/workflows/release.yml`](.github/workflows/release.yml):
 publishing a **GitHub Release** builds the package and pushes it to npm.

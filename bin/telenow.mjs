@@ -3,7 +3,7 @@
 //
 // Run in a folder that contains:
 //   telenow.app.json   (manifest; ui.entry points at your SOURCE entry, e.g. "ui/index.tsx")
-//   ui/index.tsx       (your React entry — calls mount(App) from @telenow/app/react)
+//   ui/index.tsx       (your React entry — calls mount(App) from telenow/react)
 //   README.md          (optional; shown on the marketplace listing)
 //   screenshots/*.png  (optional; shown on the listing)
 //
@@ -459,7 +459,7 @@ async function dev() {
   try {
     await esbuild.build({
       stdin: {
-        contents: `import { createMockBridge } from '@telenow/app/browser';
+        contents: `import { createMockBridge } from 'telenow/browser';
 window.telenow = createMockBridge(window.__TN_FIX__ || {});
 try { var es = new EventSource('/__livereload'); es.onmessage = function(){ location.reload(); }; } catch (e) {}
 `,
@@ -473,7 +473,7 @@ try { var es = new EventSource('/__livereload'); es.onmessage = function(){ loca
       logLevel: 'silent',
     });
   } catch (e) {
-    die(`couldn't build the dev bootstrap (is @telenow/app installed?): ${e.message}`);
+    die(`couldn't build the dev bootstrap (is telenow installed?): ${e.message}`);
   }
 
   const server = createServer((rq, rs) => {
@@ -543,7 +543,7 @@ try { var es = new EventSource('/__livereload'); es.onmessage = function(){ loca
 
 const SCAFFOLD = {
   'telenow.app.json': `{
-  "$schema": "./node_modules/@telenow/app/telenow.app.schema.json",
+  "$schema": "./node_modules/telenow/telenow.app.schema.json",
   "id": "my-app",
   "version": "1.0.0",
   "name": "My App",
@@ -583,19 +583,19 @@ add screenshots under \`screenshots/\` + an \`icon.png\`, then **Publish to mark
   "version": "1.0.0",
   "scripts": { "build": "telenow build" },
   "dependencies": {
-    "@telenow/app": "latest",
+    "telenow": "latest",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   }
 }
 `,
-  'ui/index.tsx': `import { mount } from '@telenow/app/react';
+  'ui/index.tsx': `import { mount } from 'telenow/react';
 import App from './App';
 
 mount(App);
 `,
   'ui/App.tsx': `import { useState } from 'react';
-import { useObjects, useTelenowContext } from '@telenow/app/react';
+import { useObjects, useTelenowContext } from 'telenow/react';
 
 interface Note { title: string; body?: string }
 

@@ -1,6 +1,6 @@
-// @telenow/app/react — React hooks for building an app's dashboard UI.
+// telenow/react — React hooks for building an app's dashboard UI.
 //
-//   import { useObjects, useTelenowContext } from '@telenow/app/react';
+//   import { useObjects, useTelenowContext } from 'telenow/react';
 //
 //   export default function App() {
 //     const { page } = useTelenowContext();
@@ -28,7 +28,7 @@ import {
  * Mount your root component into the dashboard's iframe. The runtime host
  * provides a `#root` element. Your bundle entry is then a one-liner:
  *
- *   import { mount } from '@telenow/app/react';
+ *   import { mount } from 'telenow/react';
  *   import App from './App';
  *   mount(App);
  */

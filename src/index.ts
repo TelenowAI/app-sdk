@@ -1,4 +1,4 @@
-// @telenow/app — SDK for building installable apps on the Telenow App Platform.
+// telenow — SDK for building installable apps on the Telenow App Platform.
 //
 // An external app: (1) verifies the platform's signed requests (agent tool calls
 // + event webhooks), and (2) reads/writes its own records via the scoped Data
