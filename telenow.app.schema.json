@@ -1,0 +1,237 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://telenow.ai/schema/telenow.app.schema.json",
+  "title": "Telenow app manifest",
+  "description": "telenow.app.json — describes a Telenow app's data, tools, UI, and events. Run `telenow validate` for semantic checks the editor can't do.",
+  "type": "object",
+  "required": ["id", "version"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "description": "Unique app id (becomes a storage key segment). Letters, digits, '.', '-', '_' only.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "description": "App version. Use semantic versioning (e.g. 1.2.0) — the platform advances the marketplace channel forward only.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "minLength": 1
+    },
+    "name": { "type": "string", "description": "Display name shown in the catalog + sidebar." },
+    "runtime": {
+      "type": "string",
+      "description": "declarative = no app code (object CRUD rules); sandboxed = JS tool handlers in the hardened runtime; external = your own backend via http handlers. Absent ⇒ declarative.",
+      "enum": ["declarative", "sandboxed", "external"]
+    },
+    "category": {
+      "type": "string",
+      "description": "Marketplace category.",
+      "examples": ["crm", "productivity", "healthcare", "ecommerce", "finance", "support", "marketing", "telephony", "other"]
+    },
+    "blurb": { "type": "string", "description": "One-line tagline for the catalog card." },
+    "icon": { "type": "string", "description": "Whitelisted sidebar/catalog icon name (resolved by the dashboard icon registry), e.g. 'boxes', 'sticky-note'." },
+    "base_url": {
+      "type": "string",
+      "description": "For external apps: base URL of your service that `http` tool handlers are called against. Required if any tool handler.kind is 'http'.",
+      "format": "uri"
+    },
+    "scopes": {
+      "type": "array",
+      "description": "Permissions consented at install (frozen — a later version that adds scopes requires re-consent). Known scopes: 'user:profile' (name+email), 'session:token' (mint a signed identity token for your backend), 'agents:read', 'calls:read', 'calls:initiate', 'whatsapp:send', 'softphone:dial', 'objects:<type>' (data access), 'http:<host>' (allow the proxy to call that host, supports a leading wildcard e.g. 'http:*.googleapis.com'), 'connection:<provider>' (inject a stored credential).",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "objects": {
+      "type": "array",
+      "description": "Declarative data types stored in the shared object store.",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "additionalProperties": true,
+        "properties": {
+          "type": { "type": "string", "description": "Object type id, unique within the app.", "minLength": 1 },
+          "label": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key"],
+              "additionalProperties": true,
+              "properties": {
+                "key": { "type": "string", "minLength": 1 },
+                "type": {
+                  "type": "string",
+                  "description": "Advisory field type (the store is schemaless; used for UI hints + indexing).",
+                  "examples": ["text", "number", "boolean", "date", "datetime", "select", "email", "phone", "url", "json"]
+                },
+                "index": { "type": "boolean", "description": "Index this field for query/upsert match. Note: object-store field indexes are shared platform-wide — index only fields you filter on." },
+                "values": { "type": "array", "items": { "type": "string" }, "description": "Allowed values for a select field." },
+                "default": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "description": "Functions your agents can call.",
+      "items": {
+        "type": "object",
+        "required": ["name", "handler"],
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "parameters": { "type": "object", "description": "JSON Schema for the tool's arguments." },
+          "timeoutSecs": { "type": "integer", "minimum": 1 },
+          "handler": {
+            "type": "object",
+            "required": ["kind"],
+            "additionalProperties": true,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "description": "object.* = declarative CRUD on a declared object; http = call your base_url; js/sandbox = run handler code in the hardened runtime.",
+                "enum": ["object.create", "object.query", "object.update", "object.delete", "http", "js", "sandbox"]
+              },
+              "object": { "type": "string", "description": "For object.* handlers: the declared object type to act on." },
+              "match": { "type": "string", "description": "For object.update/object.delete: a declared field used to locate the record." },
+              "path": { "type": "string", "description": "For http handlers: path appended to base_url." },
+              "method": { "type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+              "code": { "type": "string", "description": "For js/sandbox handlers: inline JS function body." },
+              "codeFile": { "type": "string", "description": "For js/sandbox handlers: path to a JS file (relative to the manifest), bundled at build." }
+            }
+          }
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "description": "Dashboard UI the app contributes.",
+      "additionalProperties": true,
+      "properties": {
+        "entry": { "type": "string", "description": "React entry. Source path during dev (e.g. 'ui/index.tsx'); `telenow build` compiles it to 'ui/index.js'. Required when pages are declared." },
+        "styles": { "type": "string", "description": "Optional stylesheet path emitted alongside the bundle." },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": true,
+            "properties": {
+              "id": { "type": "string", "description": "Stable, unique-within-app page id (route segment + handed to the app).", "minLength": 1 },
+              "title": { "type": "string" },
+              "icon": { "type": "string" },
+              "menu": { "type": "boolean", "description": "Show as a sidebar item (false ⇒ reachable in-app only)." },
+              "group": { "type": "string", "description": "Optional submenu grouping label." }
+            }
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "description": "Declarative event subscriptions: when `on` fires, run `handler`.",
+      "items": {
+        "type": "object",
+        "required": ["on", "handler"],
+        "additionalProperties": true,
+        "properties": {
+          "on": {
+            "type": "string",
+            "description": "Event topic to subscribe to. One of: call.started, call.ended, call.analyzed, recording.ready, or object.<type>.created (e.g. object.patient.created, or the object.*.created wildcard).",
+            "examples": ["call.ended", "call.analyzed", "object.patient.created", "object.*.created"]
+          },
+          "handler": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "kind": { "type": "string" },
+              "do": { "type": "string" },
+              "object": { "type": "string", "description": "Declared object type the handler writes (must exist in `objects`)." },
+              "key": { "type": "string" },
+              "map": { "type": "object", "additionalProperties": { "type": "string" } },
+              "path": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "schedules": {
+      "type": "array",
+      "description": "Scheduled jobs: run a handler on a fixed interval (e.g. nightly sweeps). Not a full cron — `every` is a simple duration.",
+      "items": {
+        "type": "object",
+        "required": ["key", "every", "handler"],
+        "additionalProperties": true,
+        "properties": {
+          "key": { "type": "string", "minLength": 1, "description": "Stable id, unique within the app." },
+          "every": { "type": "string", "description": "Interval between runs: 30m | 1h | 6h | 24h | 1d. Minimum 5 minutes.", "examples": ["1h", "24h"] },
+          "handler": {
+            "type": "object",
+            "required": ["kind"],
+            "additionalProperties": true,
+            "properties": {
+              "kind": { "type": "string", "enum": ["rule", "webhook"], "description": "webhook (ping your backend, usual for cron) or rule (declarative upsert)." },
+              "do": { "type": "string" },
+              "object": { "type": "string" },
+              "key": { "type": "string" },
+              "map": { "type": "object", "additionalProperties": { "type": "string" } },
+              "path": { "type": "string", "description": "webhook: path appended to base_url." }
+            }
+          }
+        }
+      }
+    },
+    "settings": {
+      "type": "array",
+      "description": "Per-install configuration fields, rendered as an admin form. Non-secret values reach the app UI/tools; `secret` values are encrypted and injected server-side only.",
+      "items": {
+        "type": "object",
+        "required": ["key"],
+        "additionalProperties": true,
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["text", "textarea", "number", "boolean", "select", "secret"],
+            "description": "Absent ⇒ text. 'secret' is encrypted at rest + injected server-side only."
+          },
+          "required": { "type": "boolean" },
+          "secret": { "type": "boolean", "description": "Encrypt this value; never expose it to the app UI." },
+          "default": { "description": "Default value (not allowed for secret fields)." },
+          "options": {
+            "type": "array",
+            "description": "For select fields.",
+            "items": {
+              "type": "object",
+              "required": ["value"],
+              "properties": { "value": { "type": "string" }, "label": { "type": "string" } }
+            }
+          },
+          "help": { "type": "string" },
+          "group": { "type": "string" }
+        }
+      }
+    },
+    "readme": { "type": "string", "description": "Usually bundled from README.md by the CLI; you don't normally set this by hand." },
+    "changelog": { "type": "string", "description": "Usually bundled from CHANGELOG.md by the CLI." },
+    "screenshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "file": { "type": "string", "description": "Package-relative image path (rewritten to a stored url at publish)." },
+          "url": { "type": "string" },
+          "caption": { "type": "string" }
+        }
+      }
+    }
+  }
+}

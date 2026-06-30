@@ -1,0 +1,91 @@
+{
+  "name": "@telenow/app",
+  "version": "0.3.0",
+  "description": "Telenow App Platform SDK — build installable apps for the Telenow voice AI dashboard: a React UI that renders in the dashboard, verify signed agent tool calls & event webhooks, and read/write your app's data. Includes the `telenow build` packaging CLI.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "telenow": "./bin/telenow.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "telenow.app.schema.json",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "telenow",
+    "voice-ai",
+    "app-platform",
+    "marketplace",
+    "plugin",
+    "crm",
+    "sdk",
+    "react",
+    "webhook",
+    "hmac"
+  ],
+  "license": "MIT",
+  "author": "Telenow AI",
+  "homepage": "https://github.com/TelenowAI/app-sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TelenowAI/app-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TelenowAI/app-sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.18",
+    "esbuild": "^0.21.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.4.0"
+  }
+}

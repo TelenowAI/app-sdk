@@ -1,0 +1,50 @@
+name: Release
+
+# Publishes @telenow/app to npm when a GitHub Release is published.
+# Flow:
+#   1. bump the version in package.json (npm version <patch|minor|major>)
+#   2. push the commit + tag
+#   3. create a GitHub Release on that tag  →  this workflow publishes to npm
+#
+# Requires one repo secret: NPM_TOKEN  (an npm automation token with publish
+# rights to the @telenow scope — Settings → Secrets and variables → Actions).
+on:
+  release:
+    types: [published]
+  workflow_dispatch: # allow a manual re-publish from the Actions tab
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm provenance attestation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - run: npm ci
+      - name: Build (tsc → dist/)
+        run: npm run build
+
+      # Guard: a Release tag like v0.3.0 must match package.json's version, so a
+      # mistagged release can never publish the wrong version.
+      - name: Verify tag matches package version
+        if: github.event_name == 'release'
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          TAG=${GITHUB_REF_NAME#v}
+          if [ "$PKG" != "$TAG" ]; then
+            echo "::error::Release tag '$TAG' != package.json version '$PKG'"; exit 1
+          fi
+          echo "Publishing @telenow/app@$PKG"
+
+      # access:public + provenance:true come from package.json publishConfig.
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

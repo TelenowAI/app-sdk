@@ -1,0 +1,28 @@
+name: CI
+
+# Type-check + build the SDK and smoke-test the `telenow` CLI on every push/PR,
+# so a broken build never reaches a release tag.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Type-check + build (tsc)
+        run: npm run build
+      - name: Smoke-test the CLI
+        run: node bin/telenow.mjs --help
+      - name: Pack (verify the published tarball contents)
+        run: npm pack --dry-run
