@@ -1,6 +1,6 @@
 {
   "name": "telenow",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Telenow App Platform SDK — build installable apps for the Telenow voice AI dashboard: a React UI that renders in the dashboard, verify signed agent tool calls & event webhooks, and read/write your app's data. Includes the `telenow build` packaging CLI.",
   "type": "module",
   "main": "./dist/index.js",
