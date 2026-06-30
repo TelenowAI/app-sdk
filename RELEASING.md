@@ -5,8 +5,9 @@ publishing a **GitHub Release** builds the package and pushes it to npm.
 
 ## One-time setup
 
-1. Create an npm **automation token** with publish rights to the `@telenow` scope
-   (npmjs.com → Access Tokens → Generate → *Automation*).
+1. Create an npm **automation token** on the account that owns (or will claim) the
+   `telenow` package (npmjs.com → Access Tokens → Generate → *Automation*). The very
+   first release publishes `telenow` and claims the unscoped name for that account.
 2. Add it as a repo secret: **Settings → Secrets and variables → Actions →
    New repository secret** named `NPM_TOKEN`.
 
