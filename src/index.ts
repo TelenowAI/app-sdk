@@ -453,3 +453,373 @@ export class DataClient {
     return this.req('DELETE', `/${encodeURIComponent(objectType)}/${encodeURIComponent(id)}`);
   }
 }
+
+/** One call from `/api/app-calls` (camelCase wire shape). */
+export interface AppCall {
+  id: string;
+  agentId: string;
+  agentName?: string | null;
+  status: string;
+  callMode: string;
+  channel: 'softphone' | 'whatsapp' | 'telephony' | 'web_call' | 'web_chat';
+  direction: string;
+  startTime: string;
+  endTime?: string | null;
+  durationSec?: number | null;
+  fromNumber?: string | null;
+  toNumber?: string | null;
+  answeredBy?: string | null;
+  disposition?: string | null;
+  wrapupDisposition?: string | null;
+  hasRecording: boolean;
+  latency: {
+    sttMsAvg?: number | null;
+    llmMsAvg?: number | null;
+    ttsMsAvg?: number | null;
+    netRttMsAvg?: number | null;
+    respMsAvg?: number | null;
+    respMsMax?: number | null;
+    respSamples?: number | null;
+    audioGapCount?: number | null;
+  };
+  createdAt: string;
+  /** Present when requested (`includeAnalysis`) / on `get`. Null until the
+   * post-call worker has analyzed the call. */
+  analysis?: CallAnalysisResult | null;
+  /** Only on `get`: the durable transcript (system turns hidden). */
+  transcript?: { role: string; text: string; at: string }[];
+}
+
+/** Post-call analysis row (camelCase; see the platform's analysis docs). */
+export interface CallAnalysisResult {
+  sessionId: string;
+  status: string;
+  summary?: string | null;
+  sentiment?: string | null;
+  sentimentScore?: number | null;
+  disposition?: string | null;
+  actionItems: unknown;
+  customData: unknown;
+  qa: unknown;
+  objections: unknown;
+  score?: number | null;
+  coaching: unknown;
+  topics: unknown;
+  keywords: unknown;
+  agentWords: number;
+  customerWords: number;
+  agentTurns: number;
+  customerTurns: number;
+  [key: string]: unknown;
+}
+
+export interface ListCallsParams {
+  agentId?: string;
+  /** call_mode filter: "agent" | "manual". */
+  mode?: string;
+  status?: string;
+  /** RFC3339 window on startTime: from inclusive, to exclusive. */
+  from?: string;
+  to?: string;
+  sort?: 'newest' | 'oldest' | 'longest' | 'shortest';
+  includeAnalysis?: boolean;
+  /** Page size, 1–200 (default 50). */
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListCallsPage {
+  calls: AppCall[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+/**
+ * Client for the call history + live-stream API (`/api/app-calls`) — the
+ * surface analytics apps are built on. Visibility follows your granted scope:
+ * `calls:read` sees calls of agents the install is BOUND to; `calls:read:org`
+ * (consented org-wide at install) sees every agent's calls.
+ *
+ *   const calls = new CallsClient('https://api.telenow.ai', process.env.TELENOW_APP_KEY!);
+ *   let page = await calls.list({ from: '2026-07-01T00:00:00Z', includeAnalysis: true });
+ *   while (page.hasMore) { ...; page = await calls.list({ offset: page.offset + page.limit }); }
+ */
+export class CallsClient {
+  private readonly baseUrl: string;
+
+  constructor(baseUrl: string, private readonly appKey: string) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
+  }
+
+  private async req<R>(method: string, path: string): Promise<R> {
+    const res = await fetch(`${this.baseUrl}/api/app-calls${path}`, {
+      method,
+      headers: { authorization: `Bearer ${this.appKey}` },
+    });
+    const json = (await res.json()) as Envelope<R>;
+    if (!res.ok || !json.success) {
+      throw new Error(json.error ?? `Calls API ${method} ${path} failed (${res.status})`);
+    }
+    return json.data as R;
+  }
+
+  /** One page of call history (filters + pagination). */
+  list(params: ListCallsParams = {}): Promise<ListCallsPage> {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined) qs.set(k, String(v));
+    }
+    const s = qs.toString();
+    return this.req('GET', s ? `/?${s}` : '/');
+  }
+
+  /** One call with its analysis + transcript. 403 unless your app is bound to
+   * the call's agent or holds `calls:read:org`. */
+  get(sessionId: string): Promise<AppCall> {
+    return this.req('GET', `/${encodeURIComponent(sessionId)}`);
+  }
+
+  /** Mint a one-time ticket for a LIVE call's event stream; connect a WebSocket
+   * to the returned `wsUrl` within 30s. Same visibility rule as `get`. */
+  streamTicket(sessionId: string): Promise<{ ticket: string; wsUrl: string }> {
+    return this.req('POST', `/${encodeURIComponent(sessionId)}/stream-ticket`);
+  }
+}
+
+// ── Billing (billing:read) ───────────────────────────────────────────────────
+
+/** The org's wallet as its own Billing page shows it. Amounts are numbers
+ * (JSON floats); `currency`/`walletRate`/`walletNative` are null for postpaid
+ * orgs (their balance is USD-accounted). */
+export interface AppWallet {
+  mode: 'prepaid' | 'postpaid';
+  suspended: boolean;
+  balanceUsd: number | null;
+  currency: string | null;
+  walletRate: number | null;
+  walletNative: number | null;
+}
+
+/** One settled charge. All money fields are the org's PRICE in USD — the
+ * platform's provider cost is never exposed. Decimal-string encoded. */
+export interface AppCharge {
+  sessionId: string;
+  agentId?: string | null;
+  agentName?: string | null;
+  callType: string;
+  startTime?: string | null;
+  llmUsd: string;
+  sttUsd: string;
+  ttsUsd: string;
+  telephonyUsd: string;
+  platformAiUsd: string;
+  postCallAnalysisUsd: string;
+  simulationUsd: string;
+  embeddingUsd: string;
+  platformFeeUsd: string;
+  featureSurchargeUsd: string;
+  totalChargeUsd: string;
+  hasEstimates: boolean;
+  /** billedMinutes/feePercent/durationSecs…; `events[]` only when requested. */
+  breakdown: Record<string, unknown>;
+  ratedAt: string;
+}
+
+export interface ListChargesParams {
+  agentId?: string;
+  callType?: string;
+  /** RFC3339 window on settlement time (ratedAt). */
+  from?: string;
+  to?: string;
+  /** Keep each charge's per-event breakdown (heavier pages). */
+  includeEvents?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListChargesPage {
+  charges: AppCharge[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+/**
+ * Client for the billing API (`/api/app-billing`) — needs `billing:read`.
+ * The FinOps surface: pull wallet balance + settled charges; pair with the
+ * `charge.settled` webhook event for the push side (its payload includes
+ * `walletBalanceUsd`, so a `when` predicate makes a zero-code budget alert).
+ */
+export class BillingClient {
+  private readonly baseUrl: string;
+
+  constructor(baseUrl: string, private readonly appKey: string) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
+  }
+
+  private async req<R>(path: string): Promise<R> {
+    const res = await fetch(`${this.baseUrl}/api/app-billing${path}`, {
+      headers: { authorization: `Bearer ${this.appKey}` },
+    });
+    const json = (await res.json()) as Envelope<R>;
+    if (!res.ok || !json.success) {
+      throw new Error(json.error ?? `Billing API GET ${path} failed (${res.status})`);
+    }
+    return json.data as R;
+  }
+
+  /** The org's wallet (null if no billing account exists yet). */
+  wallet(): Promise<AppWallet | null> {
+    return this.req('/wallet');
+  }
+
+  /** One page of settled charges, newest settlement first. */
+  charges(params: ListChargesParams = {}): Promise<ListChargesPage> {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined) qs.set(k, String(v));
+    }
+    const s = qs.toString();
+    return this.req(s ? `/charges?${s}` : '/charges');
+  }
+
+  /** One session's charge with its full (price-only) event breakdown; null
+   * while the session is still unsettled (~2-3 min after hangup). */
+  charge(sessionId: string): Promise<AppCharge | null> {
+    return this.req(`/charges/${encodeURIComponent(sessionId)}`);
+  }
+}
+
+// ── Knowledge bases (kb:read / kb:write) ─────────────────────────────────────
+
+export interface AppKb {
+  id: string;
+  /** Your stable per-app key (creates are idempotent on it). */
+  key: string | null;
+  name: string;
+  description?: string | null;
+  embeddingModel: string;
+  documentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Document metadata — never the body (you pushed it; the platform returns a
+ * sha256 `contentHash` so your sync loop can diff without refetching). */
+export interface AppKbDocument {
+  id: string;
+  kbId: string;
+  title: string;
+  sourceType: string;
+  status: 'pending' | 'embedded' | 'failed' | 'indexed';
+  error?: string | null;
+  contentBytes: number;
+  contentHash: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Client for the runtime knowledge-base API (`/api/app-kb`) — the KB-sync
+ * surface (Notion/Confluence/Drive → agent KB). Your app sees only its OWN
+ * KBs (manifest-bundled ones included). Embedding is async: poll `documents()`
+ * until status flips pending → embedded (or failed).
+ *
+ *   const kb = new KbClient('https://api.telenow.ai', process.env.TELENOW_APP_KEY!);
+ *   const faq = await kb.create({ key: 'faq', name: 'Product FAQ' });
+ *   const doc = await kb.addDocument(faq.id, { title: 'Pricing', body: text });
+ *   // later, when the source page changes (compare contentHash first):
+ *   await kb.replaceDocument(faq.id, doc.id, { body: newText }); // returns a NEW doc id
+ */
+export class KbClient {
+  private readonly baseUrl: string;
+
+  constructor(baseUrl: string, private readonly appKey: string) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
+  }
+
+  private async req<R>(method: string, path: string, body?: unknown): Promise<R> {
+    const res = await fetch(`${this.baseUrl}/api/app-kb${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${this.appKey}`,
+        'content-type': 'application/json',
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const json = (await res.json()) as Envelope<R>;
+    if (!res.ok || !json.success) {
+      throw new Error(json.error ?? `KB API ${method} ${path} failed (${res.status})`);
+    }
+    return json.data as R;
+  }
+
+  /** Your app's knowledge bases. */
+  list(): Promise<{ knowledgeBases: AppKb[] }> {
+    return this.req('GET', '/');
+  }
+
+  /** Create a KB — idempotent on `key` (re-POSTing returns the existing one). */
+  create(input: { key: string; name: string; description?: string }): Promise<AppKb> {
+    return this.req('POST', '/', input);
+  }
+
+  get(kbId: string): Promise<AppKb> {
+    return this.req('GET', `/${encodeURIComponent(kbId)}`);
+  }
+
+  remove(kbId: string): Promise<void> {
+    return this.req('DELETE', `/${encodeURIComponent(kbId)}`);
+  }
+
+  /** Document metadata (status + contentHash for sync diffing). */
+  documents(kbId: string): Promise<{ documents: AppKbDocument[] }> {
+    return this.req('GET', `/${encodeURIComponent(kbId)}/documents`);
+  }
+
+  /** Add a text document (≤ 1 MiB); embedding runs async. */
+  addDocument(kbId: string, doc: { title: string; body: string }): Promise<AppKbDocument> {
+    return this.req('POST', `/${encodeURIComponent(kbId)}/documents`, doc);
+  }
+
+  /** Replace a document's content — old chunks purge, body re-embeds, and the
+   * response carries a NEW document id (key on your own source ids). */
+  replaceDocument(
+    kbId: string,
+    docId: string,
+    doc: { title?: string; body: string },
+  ): Promise<AppKbDocument> {
+    return this.req(
+      'PUT',
+      `/${encodeURIComponent(kbId)}/documents/${encodeURIComponent(docId)}`,
+      doc,
+    );
+  }
+
+  removeDocument(kbId: string, docId: string): Promise<void> {
+    return this.req(
+      'DELETE',
+      `/${encodeURIComponent(kbId)}/documents/${encodeURIComponent(docId)}`,
+    );
+  }
+
+  /** Agents currently answering from this KB. */
+  attachments(kbId: string): Promise<{ agents: { agentId: string; agentName: string }[] }> {
+    return this.req('GET', `/${encodeURIComponent(kbId)}/attachments`);
+  }
+
+  /** Attach to an agent your app is BOUND to (app-created agents are auto-bound). */
+  attach(kbId: string, agentId: string): Promise<void> {
+    return this.req('POST', `/${encodeURIComponent(kbId)}/attach`, { agentId });
+  }
+
+  detach(kbId: string, agentId: string): Promise<void> {
+    return this.req(
+      'DELETE',
+      `/${encodeURIComponent(kbId)}/attach/${encodeURIComponent(agentId)}`,
+    );
+  }
+}

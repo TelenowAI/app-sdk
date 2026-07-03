@@ -43,11 +43,22 @@ const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const KNOWN_RUNTIMES = new Set(['declarative', 'sandboxed', 'external']);
 const KNOWN_SCOPES = new Set([
   'user:profile', 'session:token',
-  'agents:read', 'calls:read', 'calls:initiate', 'whatsapp:send', 'softphone:dial',
+  'agents:read', 'agents:write',
+  'calls:read', 'calls:read:org', 'calls:initiate',
+  'whatsapp:send', 'softphone:dial',
+  'files:read', 'files:write',
+  'campaigns:read', 'campaigns:write',
+  'data:read', 'data:write',
+  'billing:read',
+  'kb:read', 'kb:write',
 ]);
 const SCOPE_PREFIXES = ['objects:', 'http:', 'connection:'];
 const KNOWN_EVENT_TOPICS = new Set([
   'call.started', 'call.ended', 'call.analyzed', 'recording.ready',
+  // Mid-call live topics — additionally require calls:read (or calls:read:org).
+  'call.turn', 'call.barge_in', 'call.silence', 'call.dtmf', 'call.node_entered',
+  // Settlement event — additionally requires billing:read.
+  'charge.settled',
 ]);
 // Fixed topic, or object.<type>.created (incl. the object.*.created wildcard).
 function isValidEventTopic(on) {
@@ -550,7 +561,7 @@ const SCAFFOLD = {
   "runtime": "declarative",
   "category": "other",
   "blurb": "A starter Telenow app.",
-  "icon": "boxes",
+  "icon": "box",
   "scopes": ["objects:note"],
   "objects": [
     { "type": "note", "label": "Note", "fields": [
@@ -560,7 +571,7 @@ const SCAFFOLD = {
   ],
   "ui": {
     "entry": "ui/index.tsx",
-    "pages": [{ "id": "notes", "title": "Notes", "icon": "sticky-note", "menu": true }]
+    "pages": [{ "id": "notes", "title": "Notes", "icon": "file", "menu": true }]
   }
 }
 `,
@@ -577,6 +588,17 @@ Upload it in **Apps → Your apps → Upload app zip**. To list on the marketpla
 add screenshots under \`screenshots/\` + an \`icon.png\`, then **Publish to marketplace**.
 `,
   'CHANGELOG.md': `## 1.0.0\n- Initial release.\n`,
+  'telenow.dev.json': `{
+  "seed": {
+    "note": [
+      { "title": "Welcome", "body": "This is a seeded note." },
+      { "title": "Todo", "body": "Try editing App.tsx — it hot-reloads." }
+    ]
+  },
+  "agents": [{ "id": "agent-front-desk", "name": "Front Desk" }],
+  "user": { "id": "dev-1", "role": "owner", "permissions": ["view", "manage_agents"], "name": "Dr. Dev", "email": "dev@clinic.test" }
+}
+`,
   'package.json': `{
   "name": "my-app",
   "private": true,

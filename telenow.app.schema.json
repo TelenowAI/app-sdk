@@ -40,7 +40,7 @@
     },
     "scopes": {
       "type": "array",
-      "description": "Permissions consented at install (frozen — a later version that adds scopes requires re-consent). Known scopes: 'user:profile' (name+email), 'session:token' (mint a signed identity token for your backend), 'agents:read', 'calls:read', 'calls:initiate', 'whatsapp:send', 'softphone:dial', 'objects:<type>' (data access), 'http:<host>' (allow the proxy to call that host, supports a leading wildcard e.g. 'http:*.googleapis.com'), 'connection:<provider>' (inject a stored credential).",
+      "description": "Permissions consented at install (frozen — a later version that adds scopes requires re-consent). Known scopes: 'user:profile' (name+email), 'session:token' (mint a signed identity token for your backend), 'agents:read', 'agents:write', 'calls:read' (calls of agents your app is bound to), 'calls:read:org' (EVERY agent's calls org-wide — the analytics scope, consented prominently), 'calls:initiate', 'whatsapp:send', 'softphone:dial', 'files:read', 'files:write', 'campaigns:read', 'campaigns:write', 'data:read', 'data:write', 'billing:read' (wallet balance + settled charges — your org prices, never provider rates), 'kb:read', 'kb:write' (manage the app's own knowledge bases at runtime), 'objects:<type>' (data access), 'http:<host>' (allow the proxy to call that host, supports a leading wildcard e.g. 'http:*.googleapis.com'), 'connection:<provider>' (inject a stored credential).",
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },

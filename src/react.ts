@@ -197,47 +197,63 @@ export function useObjects<T = Record<string, unknown>>(
   const [error, setError] = useState<Error | null>(null);
   const queryKey = JSON.stringify(query ?? {});
 
-  const reload = useCallback(() => {
-    setLoading(true);
-    getTelenow()
-      .data.list<T>(objectType, query)
-      .then((rows) => {
-        setData(rows);
-        setError(null);
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e : new Error(String(e))))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [objectType, queryKey]);
+  // `background` refreshes keep the current list on screen (no "Loading…"
+  // flash); only the first load — and a query change — shows the spinner. This
+  // stops rapid successive refreshes (e.g. seeding many rows) from flickering
+  // the whole page back to a loading state.
+  const fetchList = useCallback(
+    (background = false) => {
+      if (!background) setLoading(true);
+      return getTelenow()
+        .data.list<T>(objectType, query)
+        .then((rows) => {
+          setData(rows);
+          setError(null);
+        })
+        .catch((e: unknown) => setError(e instanceof Error ? e : new Error(String(e))))
+        .finally(() => setLoading(false));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [objectType, queryKey],
+  );
 
   useEffect(() => {
-    reload();
-  }, [reload]);
+    void fetchList(false);
+  }, [fetchList]);
 
+  // Public reload = a BACKGROUND refresh (list stays visible while it re-syncs).
+  const reload = useCallback(() => {
+    void fetchList(true);
+  }, [fetchList]);
+
+  // Writes update the local list OPTIMISTICALLY from the record the server
+  // returns — no full re-fetch — so creating/updating/removing many rows in a
+  // row (demo seeding, bulk edits) is instant and never flickers the page. The
+  // returned record IS the persisted server row, so local state stays accurate.
   const create = useCallback(
     async (body: Partial<T>) => {
       const r = await getTelenow().data.create<T>(objectType, body);
-      reload();
+      setData((cur) => [...cur, r]);
       return r;
     },
-    [objectType, reload],
+    [objectType],
   );
 
   const update = useCallback(
     async (id: string, body: Partial<T>) => {
       const r = await getTelenow().data.update<T>(objectType, id, body);
-      reload();
+      setData((cur) => cur.map((x) => (x.id === id ? r : x)));
       return r;
     },
-    [objectType, reload],
+    [objectType],
   );
 
   const remove = useCallback(
     async (id: string) => {
       await getTelenow().data.remove(objectType, id);
-      reload();
+      setData((cur) => cur.filter((x) => x.id !== id));
     },
-    [objectType, reload],
+    [objectType],
   );
 
   return { data, loading, error, reload, create, update, remove };

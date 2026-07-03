@@ -51,7 +51,7 @@ export interface CallRecord {
   id: string;
   agent_id?: string;
   agent_name?: string;
-  /** telephony | softphone | web_call | whatsapp | web_chat */
+  /** telephony | softphone | web_call | whatsapp | web_chat | simulation */
   channel?: string;
   /** inbound | outbound | web | whatsapp */
   direction?: string;
@@ -95,7 +95,7 @@ export interface TelenowCalls {
     phone: string,
     variables?: Record<string, string>,
   ): Promise<{ sessionId?: string; status?: string }>;
-  /** Read the org's call history — needs `calls:read`. */
+  /** Read the org's call history — needs `calls:read` (or `calls:read:org`). */
   history(filters?: Record<string, string>): Promise<CallRecord[]>;
 }
 
@@ -138,8 +138,9 @@ export interface LiveCallFrame {
 
 export interface TelenowStream {
   /** Subscribe to a LIVE call's event stream (lifecycle + partial transcript).
-   *  Resolves to an unsubscribe function. Needs the `calls:read` scope. The host
-   *  holds the WebSocket and relays frames — your iframe never opens a socket. */
+   *  Resolves to an unsubscribe function. Needs the `calls:read` scope (or
+   *  `calls:read:org` for org-wide analytics apps). The host holds the
+   *  WebSocket and relays frames — your iframe never opens a socket. */
   subscribe(sessionId: string, onEvent: (frame: LiveCallFrame) => void): Promise<() => void>;
 }
 
