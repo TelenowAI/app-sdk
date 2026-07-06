@@ -134,7 +134,13 @@ export interface UiConfig {
 }
 
 /** Named platform surfaces a UI extension can target. */
-export type UiSlot = 'call_detail_panel' | 'dashboard_widget';
+export type UiSlot =
+  | 'call_detail_panel'
+  | 'dashboard_widget'
+  | 'agent_builder_panel'
+  | 'agents_overview_panel'
+  | 'call_list_panel'
+  | 'softphone_call_panel';
 
 /** Declares that the app renders `pageId` into a platform `slot`. The page also
  *  receives the slot's read-only context (e.g. `telenow.context.callId`). */
@@ -486,8 +492,13 @@ export interface AppCall {
   /** Present when requested (`includeAnalysis`) / on `get`. Null until the
    * post-call worker has analyzed the call. */
   analysis?: CallAnalysisResult | null;
-  /** Only on `get`: the durable transcript (system turns hidden). */
-  transcript?: { role: string; text: string; at: string }[];
+  /** Only on `get`: the durable transcript (system turns hidden). `agentId`
+   *  is the agent that spoke each turn — it changes across an agent-to-agent
+   *  handoff, so resolve it through `participants` to label each turn. */
+  transcript?: { role: string; text: string; at: string; agentId?: string | null }[];
+  /** Only on `get`: id→name for every agent that participated on the call
+   *  (≥2 entries after a handoff). Resolve each turn's `agentId` through this. */
+  participants?: Record<string, string>;
 }
 
 /** Post-call analysis row (camelCase; see the platform's analysis docs). */
@@ -806,6 +817,13 @@ export class KbClient {
     );
   }
 
+  /** Semantic search over this KB — returns the top chunks, relevance-ranked.
+   *  For grounding an app mid-task (e.g. a coaching app pulling playbook snippets
+   *  for the current call). Only your app's own KBs are searchable. */
+  search(kbId: string, input: { query: string; topK?: number }): Promise<{ results: AppKbChunk[] }> {
+    return this.req('POST', `/${encodeURIComponent(kbId)}/search`, input);
+  }
+
   /** Agents currently answering from this KB. */
   attachments(kbId: string): Promise<{ agents: { agentId: string; agentName: string }[] }> {
     return this.req('GET', `/${encodeURIComponent(kbId)}/attachments`);
@@ -821,5 +839,221 @@ export class KbClient {
       'DELETE',
       `/${encodeURIComponent(kbId)}/attach/${encodeURIComponent(agentId)}`,
     );
+  }
+}
+
+// ── App AI Gateway (ai:llm / ai:tts / ai:stt) ────────────────────────────────
+
+export interface AiChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface AiUsage {
+  inputTokens: number;
+  outputTokens: number;
+  /** true when the provider didn't report usage and tokens were estimated. */
+  estimated: boolean;
+}
+
+export interface AiLlmRequest {
+  messages: AiChatMessage[];
+  /** Coarse tier: 'fast' | 'balanced' | 'smart' (default 'balanced'). Ignored
+   *  when an explicit provider+model is given. */
+  tier?: 'fast' | 'balanced' | 'smart';
+  /** Explicit catalog model — both required, and the pair must be catalogued. */
+  provider?: string;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  /** The live call this AI spend attaches to (required — billing is per-call). */
+  sessionId: string;
+  /** BYOK: your own provider key ⇒ the org is NOT charged for this call (you bill
+   *  it through your own app pricing instead). */
+  apiKey?: string;
+}
+
+export interface AiLlmResponse {
+  text: string;
+  provider: string;
+  model: string;
+  byok: boolean;
+  usage: AiUsage;
+}
+
+export interface AiTtsRequest {
+  text: string;
+  voice: string;
+  /** TTS provider (default 'elevenlabs'); needs a platform key unless BYOK. */
+  provider?: string;
+  model?: string;
+  sessionId: string;
+  apiKey?: string;
+}
+
+export interface AiTtsResponse {
+  /** Base64 audio. Usually μ-law 8 kHz (see `format`) — the runtime's telephony
+   *  format; decode accordingly. */
+  audioBase64: string;
+  format: string;
+  sampleRate: number;
+  channels: number;
+  provider: string;
+  voice: string;
+  byok: boolean;
+  chars: number;
+}
+
+/**
+ * Client for the App AI Gateway (`/api/app-ai`) — invoke the platform's LLM and
+ * TTS engines with the org's catalog models, BILLED TO THE ORG WALLET (unless
+ * you pass your own `apiKey`, BYOK). Every call attaches to one of your calls
+ * via `sessionId`, so the spend lands on that call's bill.
+ *
+ *   const ai = new AiClient('https://api.telenow.ai', process.env.TELENOW_APP_KEY!);
+ *   const { text } = await ai.llm({
+ *     tier: 'fast',
+ *     sessionId,
+ *     messages: [{ role: 'user', content: 'Summarise the call so far.' }],
+ *   });
+ */
+export class AiClient {
+  private readonly baseUrl: string;
+
+  constructor(baseUrl: string, private readonly appKey: string) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
+  }
+
+  private async req<R>(method: string, path: string, body?: unknown): Promise<R> {
+    const res = await fetch(`${this.baseUrl}/api/app-ai${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${this.appKey}`,
+        'content-type': 'application/json',
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const json = (await res.json()) as Envelope<R>;
+    if (!res.ok || !json.success) {
+      throw new Error(json.error ?? `AI API ${method} ${path} failed (${res.status})`);
+    }
+    return json.data as R;
+  }
+
+  /** Chat completion on a platform (or BYOK) model. */
+  llm(request: AiLlmRequest): Promise<AiLlmResponse> {
+    return this.req('POST', '/llm', request);
+  }
+
+  /** Streaming chat completion (SSE). Calls `onToken` per token; resolves to the
+   *  full text + usage when the stream ends. Billed identically to `llm`. */
+  async llmStream(
+    request: AiLlmRequest,
+    onToken: (token: string) => void,
+  ): Promise<{ text: string; usage: AiUsage }> {
+    const res = await fetch(`${this.baseUrl}/api/app-ai/llm/stream`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${this.appKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!res.ok || !res.body) throw new Error(`AI stream failed (${res.status})`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    let acc = '';
+    let usage: AiUsage = { inputTokens: 0, outputTokens: 0, estimated: true };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buf.indexOf('\n\n')) >= 0) {
+        const raw = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        const payload = raw
+          .split('\n')
+          .filter((l) => l.startsWith('data:'))
+          .map((l) => l.slice(5).replace(/^ /, ''))
+          .join('\n');
+        if (!payload) continue;
+        let frame: { token?: string; done?: boolean; usage?: AiUsage; error?: string };
+        try {
+          frame = JSON.parse(payload);
+        } catch {
+          continue;
+        }
+        if (frame.error) throw new Error(frame.error);
+        if (frame.done) usage = frame.usage ?? usage;
+        else if (typeof frame.token === 'string') {
+          acc += frame.token;
+          onToken(frame.token);
+        }
+      }
+    }
+    return { text: acc, usage };
+  }
+
+  /** Text-to-speech; returns base64 audio (usually μ-law 8 kHz). */
+  tts(request: AiTtsRequest): Promise<AiTtsResponse> {
+    return this.req('POST', '/tts', request);
+  }
+
+  /** Available model tiers + the org's catalog (for building a model picker). */
+  models(): Promise<{ tiers: { llm: string[] }; catalog: unknown }> {
+    return this.req('GET', '/models');
+  }
+}
+
+// ── KB search result chunk ───────────────────────────────────────────────────
+
+export interface AppKbChunk {
+  chunkId: string;
+  docId: string;
+  seq: number;
+  text: string;
+}
+
+// ── Members roster (members:read) ────────────────────────────────────────────
+
+export interface AppMember {
+  userId: string;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  role: string;
+  /** Only present when the app also holds `user:profile` (PII gate). */
+  email?: string;
+}
+
+/**
+ * Client for the org member roster (`/api/app-members`) — for apps that manage
+ * per-user config (e.g. a coaching app's admin page that enables coaching and
+ * maps a knowledge base per user). Scoped to the org that installed the app.
+ * Email is withheld unless the app also holds `user:profile`.
+ *
+ *   const members = new MembersClient('https://api.telenow.ai', process.env.TELENOW_APP_KEY!);
+ *   const { members: roster } = await members.list();
+ */
+export class MembersClient {
+  private readonly baseUrl: string;
+
+  constructor(baseUrl: string, private readonly appKey: string) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
+  }
+
+  private async req<R>(path: string): Promise<R> {
+    const res = await fetch(`${this.baseUrl}/api/app-members${path}`, {
+      headers: { authorization: `Bearer ${this.appKey}` },
+    });
+    const json = (await res.json()) as Envelope<R>;
+    if (!res.ok || !json.success) {
+      throw new Error(json.error ?? `Members API GET ${path} failed (${res.status})`);
+    }
+    return json.data as R;
+  }
+
+  /** The org's members. */
+  list(): Promise<{ members: AppMember[]; total: number }> {
+    return this.req('/');
   }
 }
