@@ -51,6 +51,9 @@ const KNOWN_SCOPES = new Set([
   'data:read', 'data:write',
   'billing:read',
   'kb:read', 'kb:write',
+  'ai:llm', 'ai:tts', 'ai:stt',
+  'calls:transcribe:live',
+  'members:read',
 ]);
 const SCOPE_PREFIXES = ['objects:', 'http:', 'connection:'];
 const KNOWN_EVENT_TOPICS = new Set([
@@ -150,6 +153,18 @@ function validateManifest(m, { cwd } = {}) {
   }
   if (cwd && ui.entry && String(ui.entry).trim() && !existsSync(join(cwd, ui.entry))) {
     E(`ui.entry source '${ui.entry}' not found`);
+  }
+
+  // knowledgeBases — each needs an `id` (the server's parse rejects the whole
+  // manifest with "missing field `id`" otherwise) + titled/bodied documents.
+  for (const kb of Array.isArray(m.knowledgeBases) ? m.knowledgeBases : []) {
+    if (!kb || !kb.id || !String(kb.id).trim()) {
+      E(`knowledgeBases entry is missing \`id\`${kb && kb.key ? ` (found \`key\` — rename it to \`id\`)` : ''}`);
+      continue;
+    }
+    for (const d of Array.isArray(kb.documents) ? kb.documents : []) {
+      if (!d || !d.title || !d.body) E(`knowledge base '${kb.id}' has a document without a title/body`);
+    }
   }
 
   // scopes — warn on shapes the platform doesn't recognise (typo guard)
@@ -290,6 +305,14 @@ async function build() {
     const p = join(cwd, s.file);
     if (!existsSync(p)) die(`screenshot '${s.file}' not found`);
     zip.addFile(s.file, readFileSync(p));
+  }
+  // Custom app logo beside the manifest — the server validator picks it up and
+  // it overrides any built-in `icon` name on the listing.
+  for (const name of ['icon.png', 'icon.jpg', 'icon.jpeg', 'icon.webp']) {
+    if (existsSync(join(cwd, name))) {
+      zip.addFile(name, readFileSync(join(cwd, name)));
+      break;
+    }
   }
 
   const outName = `${manifest.id}-${manifest.version}.telenow.zip`;
