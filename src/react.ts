@@ -17,6 +17,7 @@ import {
   getTelenow,
   type AppRecord,
   type CallRecord,
+  type TelenowAgentPublicLink,
   type TelenowAgentSummary,
   type TelenowContext,
   type TelenowHttpRequest,
@@ -79,6 +80,11 @@ export function useCall() {
       calls ? calls.initiate(agentId, phone) : unavailable('calls.initiate'),
     history: (filters?: Record<string, string>) =>
       calls ? calls.history(filters) : unavailable('calls.history'),
+    /** Open the call's detail page (recording + transcript). Navigates away. */
+    open: (sessionId: string) =>
+      // Check the METHOD: `calls` predates `open`, so an older host has one
+      // without the other.
+      calls?.open ? calls.open(sessionId) : unavailable('calls.open'),
   };
 }
 
@@ -112,7 +118,28 @@ export function useHttp() {
 }
 
 /** The org's agents (id + name), loaded on mount. Requires `agents:read`. */
-export function useAgents(): { agents: TelenowAgentSummary[]; loading: boolean; error: Error | null } {
+export function useAgents(): {
+  agents: TelenowAgentSummary[];
+  loading: boolean;
+  error: Error | null;
+  /** Build an agent from one of your manifest templates. `{ open: false }` skips
+   *  the jump to the agent builder, which would otherwise unmount your page
+   *  mid-setup. Needs an owner/admin user. */
+  createFromTemplate: (
+    templateId: string,
+    opts?: { open?: boolean },
+  ) => Promise<{ agentId: string; kind: 'single' | 'flow' }>;
+  /** Build a whole team from one of your manifest team templates. */
+  createTeamFromTemplate: (teamId: string) => Promise<{
+    teamId: string;
+    entryAgentId: string | null;
+    agents: { ref: string; agentId: string | null; kind: 'single' | 'flow' }[];
+  }>;
+  /** Read the public slug of an agent your app owns (needs `agents:read`). */
+  publicLink: (agentId: string) => Promise<TelenowAgentPublicLink>;
+  /** Publish/unpublish it (needs `agents:write` + owner/admin). */
+  setPublic: (agentId: string, enabled?: boolean) => Promise<TelenowAgentPublicLink>;
+} {
   const [agents, setAgents] = useState<TelenowAgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -134,7 +161,32 @@ export function useAgents(): { agents: TelenowAgentSummary[]; loading: boolean; 
       .catch((e: unknown) => setError(e instanceof Error ? e : new Error(String(e))))
       .finally(() => setLoading(false));
   }, []);
-  return { agents, loading, error };
+  // Read the bridge per call rather than closing over it: the actions are the
+  // point of the hook (setup buttons live in app pages), and `unavailable`
+  // turns a host/bundle skew into a clear action error instead of a TypeError.
+  return {
+    agents,
+    loading,
+    error,
+    createFromTemplate: (templateId, opts) => {
+      const a = getTelenow().agents;
+      return a ? a.createFromTemplate(templateId, opts) : unavailable('agents.createFromTemplate');
+    },
+    createTeamFromTemplate: (teamId) => {
+      const a = getTelenow().agents;
+      return a ? a.createTeamFromTemplate(teamId) : unavailable('agents.createTeamFromTemplate');
+    },
+    publicLink: (agentId) => {
+      const a = getTelenow().agents;
+      // `publicLink` postdates `agents` itself, so check the METHOD, not just
+      // the namespace — an older host has agents.list but not this.
+      return a?.publicLink ? a.publicLink(agentId) : unavailable('agents.publicLink');
+    },
+    setPublic: (agentId, enabled) => {
+      const a = getTelenow().agents;
+      return a?.setPublic ? a.setPublic(agentId, enabled) : unavailable('agents.setPublic');
+    },
+  };
 }
 
 /** The org's call history with optional filters; `reload` to refresh. Requires `calls:read`. */

@@ -41,12 +41,40 @@ const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 const KEY_SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const KNOWN_RUNTIMES = new Set(['declarative', 'sandboxed', 'external']);
+// Scopes are enforced in TWO separate planes, and WhatsApp uses a DIFFERENT NAME in
+// each — this list is the union of both, so keep them straight when editing:
+//
+//   UI-bridge plane  — app pages calling window.telenow, enforced in the dashboard
+//                      (AppPageHost.tsx `need(...)`), acting as the signed-in user.
+//                      WhatsApp send/list here is `whatsapp:send`.
+//   App-key REST     — server-to-server /api/app-* calls, enforced in Rust
+//                      (app_manifest.rs constants + check_auth_scope).
+//                      WhatsApp here is `whatsapp` / `whatsapp:templates` /
+//                      `whatsapp:campaign`.
+//
+// An app whose UI page sends WhatsApp AND whose backend/poller calls the REST API
+// needs BOTH `whatsapp:send` and `whatsapp`. Declaring only one silently fails on
+// the other plane, because the server does not validate scopes[] at upload — this
+// warning is the only check a developer gets.
+//
+// Workflow steps (services/workflow.rs `send-message`) perform NO scope check at
+// all; they are authorized by the install itself. Do not add a scope for them.
 const KNOWN_SCOPES = new Set([
   'user:profile', 'session:token',
   'agents:read', 'agents:write',
+  // Agent-config plane. The per-group scopes are listed out rather than matched
+  // by prefix so a typo'd group (`…:write:prompts`) is caught here — the server
+  // would just refuse the patch at runtime with nothing pointing at the manifest.
+  'agents:config:read', 'agents:config:write',
+  'agents:config:write:prompt', 'agents:config:write:model',
+  'agents:config:write:voice', 'agents:config:write:stt',
+  'agents:config:write:behavior', 'agents:config:write:flow',
+  'agents:config:write:telephony', 'agents:config:write:analysis',
   'calls:read', 'calls:read:org', 'calls:initiate',
   'whatsapp:send', 'softphone:dial',
+  'whatsapp', 'whatsapp:templates', 'whatsapp:campaign', 'whatsapp:web',
   'files:read', 'files:write',
+  'links:read', 'links:write',
   'campaigns:read', 'campaigns:write',
   'data:read', 'data:write',
   'billing:read',
@@ -56,12 +84,20 @@ const KNOWN_SCOPES = new Set([
   'members:read',
 ]);
 const SCOPE_PREFIXES = ['objects:', 'http:', 'connection:'];
+// Mirrors the server's list in services/app_manifest.rs. An unknown topic is a
+// hard ERROR here, so anything missing from this set BLOCKS a manifest that the
+// server would have dispatched perfectly well — keep the two in step.
 const KNOWN_EVENT_TOPICS = new Set([
   'call.started', 'call.ended', 'call.analyzed', 'recording.ready',
   // Mid-call live topics — additionally require calls:read (or calls:read:org).
   'call.turn', 'call.barge_in', 'call.silence', 'call.dtmf', 'call.node_entered',
   // Settlement event — additionally requires billing:read.
   'charge.settled',
+  // Native-WhatsApp inbox events. Both carry message content, so both
+  // additionally require the `whatsapp` scope (enforced at dispatch).
+  'whatsapp.message.received', 'whatsapp.message.status',
+  // WABA account-health change — no message content.
+  'whatsapp.account.health',
 ]);
 // Fixed topic, or object.<type>.created (incl. the object.*.created wildcard).
 function isValidEventTopic(on) {

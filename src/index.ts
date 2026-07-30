@@ -131,6 +131,17 @@ export interface UiConfig {
   pages?: UiPage[];
   /** Render one of your pages into a platform slot (C6). */
   extensions?: UiExtension[];
+  /** Declarative UI the PLATFORM renders in its own components — no iframe.
+   *
+   *  `extensions` embeds your page; `contributions` describes what you want and
+   *  lets the host draw it. That is the only way to reach places an iframe
+   *  structurally cannot go (a cell in the host's table, an item in its row menu,
+   *  a button in its list toolbar), and because there is no foreign document
+   *  there is nothing to style-match and no theme to keep in sync.
+   *
+   *  Use a contribution for the ENTRY POINT and a page (usually `modal: true`)
+   *  for the work itself. */
+  contributions?: UiContribution[];
 }
 
 /** Named platform surfaces a UI extension can target. */
@@ -140,7 +151,9 @@ export type UiSlot =
   | 'agent_builder_panel'
   | 'agents_overview_panel'
   | 'call_list_panel'
-  | 'softphone_call_panel';
+  | 'softphone_call_panel'
+  /** Beside a campaign's target importer. Context: `campaignId`, `agentId`. */
+  | 'campaign_targets_panel';
 
 /** Declares that the app renders `pageId` into a platform `slot`. The page also
  *  receives the slot's read-only context (e.g. `telenow.context.callId`). */
@@ -150,6 +163,34 @@ export interface UiExtension {
   pageId: string;
   title?: string;
   icon?: string;
+}
+
+/** Host lists a contribution can attach to. */
+export type UiSurface = 'campaign_targets' | 'campaigns_list' | 'calls_list' | 'agents_list';
+
+/** What a contribution renders. A closed set on purpose: an app able to draw
+ *  arbitrary markup inside the dashboard could draw a convincing fake login. */
+export type UiContributionKind = 'list_action' | 'column' | 'row_action' | 'bulk_action';
+
+/** One declarative contribution the platform renders with its OWN components. */
+export interface UiContribution {
+  kind: UiContributionKind;
+  surface: UiSurface;
+  /** Stable key, NOT a label — the host uses it as a React key and sends it back
+   *  when the user activates the contribution. Rename `label` freely; changing
+   *  `id` makes it a different contribution. */
+  id: string;
+  /** Button label, column header, or menu item text. Required for every kind. */
+  label: string;
+  icon?: string;
+  /** The page to open. Required for every kind EXCEPT `column`, which renders
+   *  values rather than acting. Must reference a `pages[].id`. */
+  pageId?: string;
+  /** Open `pageId` as a modal instead of navigating — what a form or mapper wants. */
+  modal?: boolean;
+  /** `column` only. */
+  align?: 'left' | 'right' | 'center';
+  description?: string;
 }
 
 /** A marketplace listing screenshot. Authored with `file` (a package-relative
