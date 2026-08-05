@@ -275,6 +275,32 @@ export interface AppAgentTeamMember {
   [key: string]: unknown;
 }
 
+/** Fields of a finished call you can map into your object.
+ *
+ *  The same reference language the dashboard's own call destinations use, so
+ *  `analysis.custom.interested` means one thing everywhere.
+ *
+ *  - `call.outcome` — `answered` | `no-answer` | `busy` | `failed`
+ *  - `call.to` `call.from` `call.ended_at` `call.attempt`
+ *  - `analysis.summary` `analysis.sentiment` `analysis.disposition` `analysis.topics`
+ *  - `analysis.custom.<name>` — whatever your agent extracts
+ *  - `var.<name>` — a context variable
+ *  - `'literal'` — fixed text, in single quotes
+ */
+export type CallFieldRef = string;
+
+export interface PostCallDef {
+  /** One of your own `objects[].type`. Rejected at publish if you never declared it. */
+  object: string;
+  /** `{ "<field on your object>": "<call field ref>" }`. Rejected at publish when
+   *  empty — it would store a blank row for every call. */
+  mapping: Record<string, CallFieldRef>;
+  /** Which outcomes to store. Omit for all of them — an app asking for post-call
+   *  capture almost always wants the unanswered calls too, which is the whole
+   *  reason this exists rather than `call.ended`. */
+  firesOn?: ('answered' | 'no-answer' | 'busy' | 'failed')[];
+}
+
 export interface Manifest {
   id: string;
   version: string;
@@ -288,6 +314,11 @@ export interface Manifest {
   /** Dashboard UI: React bundle + menu pages. */
   ui?: UiConfig;
   events?: EventDef[];
+  /** Store every finished call into one of your own objects — declaratively, with
+   *  no handler and no server to run. Applies to every agent your app is bound to,
+   *  exactly as `tools` do, and resolved from the manifest at delivery time so an
+   *  edit takes effect on the next call. */
+  postCall?: PostCallDef;
   /** Scheduled jobs run on a fixed interval (e.g. nightly sweeps). */
   schedules?: ScheduleDef[];
   /** Per-install config fields, rendered as an admin form. */
