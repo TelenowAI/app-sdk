@@ -71,6 +71,7 @@ export interface WhenPredicate {
 export type AppEventTopic =
   | 'call.started'
   | 'call.ended'
+  | 'call.machine_detected'
   | 'call.analyzed'
   | 'recording.ready'
   | 'call.turn'
@@ -282,6 +283,9 @@ export interface AppAgentTeamMember {
  *
  *  - `call.outcome` — `answered` | `no-answer` | `busy` | `failed`
  *  - `call.to` `call.from` `call.ended_at` `call.attempt`
+ *  - `keypad.digits` `keypad.choices` — what the caller pressed and what each
+ *    press meant. Campaign calls only; a postCall capture resolves them to
+ *    nothing, because `call.completed` does not carry the keypad log.
  *  - `analysis.summary` `analysis.sentiment` `analysis.disposition` `analysis.topics`
  *  - `analysis.custom.<name>` — whatever your agent extracts
  *  - `var.<name>` — a context variable

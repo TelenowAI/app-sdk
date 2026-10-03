@@ -52,7 +52,7 @@
   ],
   "license": "MIT",
   "author": "Telenow AI",
-  "homepage": "https://github.com/TelenowAI/app-sdk#readme",
+  "homepage": "https://telenow.ai/docs/app-platform",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TelenowAI/app-sdk.git"

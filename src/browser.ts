@@ -268,7 +268,17 @@ export interface TelenowWhatsapp {
   sendTemplate(
     channelId: string,
     to: string,
-    opts: { template: string; language?: string; variables?: string[]; urlSuffix?: string },
+    opts: {
+      template: string;
+      language?: string;
+      variables?: string[];
+      urlSuffix?: string;
+      /** Which button `urlSuffix` fills, counting from 0 in the order the
+       *  buttons appear on the template. Omit unless the template has more than
+       *  one — naming the wrong one sends a working link on the wrong button,
+       *  which WhatsApp delivers without complaint. */
+      buttonIndex?: number;
+    },
   ): Promise<unknown>;
 }
 
@@ -1011,6 +1021,7 @@ export function createMockBridge(opts: MockBridgeOptions = {}): TelenowBridge {
           channelId, to, template: opts.template,
           vars: opts.variables?.length ?? 0,
           hasUrlSuffix: Boolean(opts.urlSuffix),
+          buttonIndex: opts.buttonIndex ?? 0,
         });
         return { ok: true as const };
       },
