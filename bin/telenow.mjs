@@ -80,7 +80,7 @@ const KNOWN_SCOPES = new Set([
   'billing:read',
   'kb:read', 'kb:write',
   'ai:llm', 'ai:tts', 'ai:stt',
-  'calls:transcribe:live',
+  'calls:transcribe:live', 'calls:context',
   'members:read',
 ]);
 const SCOPE_PREFIXES = ['objects:', 'http:', 'connection:'];
