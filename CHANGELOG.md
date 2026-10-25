@@ -2,13 +2,6 @@
 
 ## 0.6.0
 
-<!-- ───────────────────────────────────────────────────────────────────────────
-DRAFT — the block below was reconstructed from uncommitted diffs by someone who
-did NOT write that code. Every line needs a nod from whoever did before this is
-published; the wording is a starting point, not a record. Delete this comment
-once reviewed.
-──────────────────────────────────────────────────────────────────────────── -->
-
 ### Agent configuration
 - **`telenow.agents.getConfig(agentId)`** — read a bound agent's full setup:
   prompt, model, voice, STT, behaviour, telephony and the flow graph. Secret-free
@@ -17,7 +10,11 @@ once reviewed.
 - **`telenow.agents.updateConfig(agentId, patch)`** — write settings back. Gated
   **per setting group** (`prompt` · `model` · `voice` · `stt` · `behavior` ·
   `flow` · `telephony` · `analysis`), so an improver app asks only for what it
-  changes. The group is decided by the FIELD, not the section it appears in.
+  changes: each group needs its own `agents:config:write:<group>` scope. The group
+  is decided by the FIELD, not the section it appears in, and every group in a
+  patch is authorized before any of it is applied. Pass
+  `ifUnmodifiedSince: config.updatedAt` to get a conflict instead of overwriting a
+  dashboard edit.
 
 ### Agent sharing
 - **`telenow.agents.publicLink(agentId)`** — the agent's public slug, share URL and
@@ -33,8 +30,18 @@ once reviewed.
   call's own detail page (recording, transcript, timeline) rather than re-hosting
   any of it. `useCall().open` checks the METHOD, not just the namespace, so it
   degrades cleanly on an older dashboard.
-- **`telenow.calls.arm(sessionId, opts)`** — arm live assistance on a call in
-  progress.
+- **`postCall` in the manifest** — store every finished call into one of your own
+  objects, declaratively, with no handler or server: `{ object, mapping, firesOn? }`,
+  where `mapping` maps your object's fields to call fields (`call.outcome`,
+  `call.to` / `call.from` / `call.ended_at` / `call.attempt`, `keypad.digits` /
+  `keypad.choices`, `analysis.summary` / `sentiment` / `disposition` / `topics`,
+  `analysis.custom.<name>`, `var.<name>`, or a `'literal'`). Unanswered calls are
+  included unless `firesOn` narrows the outcomes.
+- **New event topics** an app may subscribe to: `call.machine_detected` (the answer
+  was classified as a machine), `call.completed` (every terminal outcome, including
+  no-answer and busy; `call.ended` fires only for an answered call) and
+  `campaign.call.completed` (a campaign target reached a terminal state; needs
+  `campaigns:write`). `AppEventTopic` now lists every topic the platform dispatches.
 
 ### Platform AI gateway
 - **`telenow.ai.llm(request)`** and **`ai.llmStream(request, onToken)`** — the
@@ -48,25 +55,31 @@ once reviewed.
   expiring URL that does exactly one thing, with no account. `list` **never**
   returns tokens; the token exists only in the response to `mint`.
 
-### Knowledge base, files, members
-- **`telenow.kb.search(kbId, request)` / `kb.list()`** — query the runtime KB.
-- **`telenow.files.extractText(path)`** — plain text out of a stored `.pdf` /
-  `.docx` / `.txt` / `.md` (`files:read`).
+### Files, members
+- **`telenow.files.extract(path)`** — plain text out of a stored `.pdf` / `.docx` /
+  `.txt` / `.md`, as `{ text, chars, truncated }` (`files:read`).
 - **`telenow.members.list()`** — the org's member roster (id, name, email, role).
   Needs `members:read`.
 
 ### CLI (`telenow build` / `validate`)
-- Validates the newer scopes: the `agents:config:*` group scopes (listed
-  individually so a typo'd group is caught rather than silently refused at
-  runtime), `whatsapp` / `whatsapp:templates` / `whatsapp:campaign` /
-  `whatsapp:web`, and `links:read` / `links:write`.
-- Knows the native-WhatsApp event topics (`whatsapp.message.received`,
-  `whatsapp.message.status`, `whatsapp.account.health`).
+- Validates the newer scopes: `agents:config:read`, `agents:config:write` and the
+  eight `agents:config:write:<group>` scopes (listed individually so a typo'd group
+  is caught rather than silently refused at runtime), `whatsapp` /
+  `whatsapp:templates` / `whatsapp:campaign` / `whatsapp:web`, `links:read` /
+  `links:write`, and `calls:context`.
+- Knows every event topic the platform dispatches: the native-WhatsApp ones
+  (`whatsapp.message.received`, `whatsapp.message.status`,
+  `whatsapp.account.health`) and `call.machine_detected`, `call.completed` and
+  `campaign.call.completed`, which `validate` previously refused as unknown.
 - Documents the **two scope planes** in-source: the UI bridge (`whatsapp:send`)
   and the app-key REST surface (`whatsapp`). An app that sends from a page AND
   from its backend needs both — declaring one silently fails on the other plane.
 
-<!-- ── end DRAFT ─────────────────────────────────────────────────────────── -->
+### WhatsApp
+- **`telenow.whatsapp.sendTemplate(…, { buttonIndex })`** — which button
+  `urlSuffix` fills, counting from 0 in the order the buttons appear on the
+  template. Omit it unless the template has more than one URL button; it defaults
+  to the first.
 
 ### App UI & connectors
 - **`telenow.connector.connections(capability)`** — the org's connections that can

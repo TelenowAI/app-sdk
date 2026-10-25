@@ -89,6 +89,11 @@ const SCOPE_PREFIXES = ['objects:', 'http:', 'connection:'];
 // server would have dispatched perfectly well — keep the two in step.
 const KNOWN_EVENT_TOPICS = new Set([
   'call.started', 'call.ended', 'call.analyzed', 'recording.ready',
+  // The answer was classified as a machine (AMD) — coarse call metadata, no extra scope.
+  'call.machine_detected',
+  // Every terminal outcome, no-answer and busy included (`call.ended` fires only
+  // for an answered call).
+  'call.completed',
   // Mid-call live topics — additionally require calls:read (or calls:read:org).
   'call.turn', 'call.barge_in', 'call.silence', 'call.dtmf', 'call.node_entered',
   // Settlement event — additionally requires billing:read.
@@ -96,6 +101,9 @@ const KNOWN_EVENT_TOPICS = new Set([
   // Native-WhatsApp inbox events. Both carry message content, so both
   // additionally require the `whatsapp` scope (enforced at dispatch).
   'whatsapp.message.received', 'whatsapp.message.status',
+  // A campaign target reached a terminal state (the only event for an unanswered
+  // campaign call) — additionally requires campaigns:write.
+  'campaign.call.completed',
   // WABA account-health change — no message content.
   'whatsapp.account.health',
 ]);

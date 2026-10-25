@@ -72,6 +72,7 @@ export type AppEventTopic =
   | 'call.started'
   | 'call.ended'
   | 'call.machine_detected'
+  | 'call.completed'
   | 'call.analyzed'
   | 'recording.ready'
   | 'call.turn'
@@ -79,6 +80,11 @@ export type AppEventTopic =
   | 'call.silence'
   | 'call.dtmf'
   | 'call.node_entered'
+  | 'charge.settled'
+  | 'campaign.call.completed'
+  | 'whatsapp.message.received'
+  | 'whatsapp.message.status'
+  | 'whatsapp.account.health'
   | `object.${string}.created`
   | (string & {});
 
