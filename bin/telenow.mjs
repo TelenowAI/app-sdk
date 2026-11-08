@@ -754,6 +754,12 @@ if (cmd === 'build') {
 } else if (cmd === 'init') {
   init(process.argv[3]); // alias for `telenow app init`
 } else {
-  console.log('Usage:\n  telenow app init <name>   scaffold a new app\n  telenow dev [--port N]    live preview with hot reload (mock or in-dashboard)\n  telenow validate          check telenow.app.json for errors\n  telenow build             validate, bundle + zip the app in this folder');
-  process.exit(cmd ? 1 : 0);
+  // Every other command — and `telenow` / `telenow --help` — is an ACCOUNT command (login,
+  // agents, calls, prompts, …), compiled from src/cli/ into dist/cli/. The app lines above are
+  // passed in so `telenow --help` lists both kinds.
+  const APP_USAGE = '  telenow app init <name>   scaffold a new app\n  telenow dev [--port N]    live preview with hot reload (mock or in-dashboard)\n  telenow validate          check telenow.app.json for errors\n  telenow build             validate, bundle + zip the app in this folder';
+  import('../dist/cli/main.js')
+    .then((m) => m.main(process.argv.slice(2), { appUsage: APP_USAGE }))
+    .then((code) => { process.exitCode = code; })
+    .catch((e) => die(`the account commands could not start: ${e.message}`));
 }

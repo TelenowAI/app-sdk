@@ -1,5 +1,180 @@
 # Changelog
 
+## Unreleased (0.7.0)
+
+### Account commands in the `telenow` command
+The `telenow` command now also works with your Telenow account, with an org API key.
+Every app command (`app init`, `dev`, `validate`, `build`) works exactly as before.
+
+- **`telenow login`** opens the dashboard in your browser. You check the code,
+  pick the org and the key's role, and approve. The CLI then saves a new org API
+  key made for this computer in `~/.config/telenow/config.json` (readable only by
+  you). The key is named `telenow CLI — <computer> — <date>` and is listed and
+  revoked like any other key.
+  - Over SSH, in a container, or when an AI assistant runs it, it prints the link
+    and the code instead of opening a browser. `--no-browser` asks for that.
+  - Keys made this way expire. The CLI says when, and says "this login expired"
+    once one has.
+  - `--key` asks for an existing key without showing it; scripts pipe one in
+    with `--key-stdin`. `TELENOW_API_KEY` overrides the saved key.
+  - A server without browser sign-in falls back to asking for a key, and says
+    why.
+  - Every key is checked with the server before it is saved.
+  - Use `--profile` to keep one login per org, and `--base-url` for another
+    server.
+  - Also `logout` (`--revoke` also revokes the key on the server), `whoami`,
+    `profiles list` and `profiles use`.
+- **`telenow agents list | get`**: lists show a short view; `--full` shows whole
+  rows. Secrets always come back masked.
+- **`telenow calls list | get | transcript`**: `calls transcript` prints one line
+  per turn, the cheapest form for an AI assistant to read. `calls list --from /
+  --to` days are read in your computer's time zone (`--tz` to choose another);
+  the server would otherwise use its own.
+- **Debugging a call:**
+  - `calls cost` shows what a call was charged, line by line. Before the bill is
+    settled it says so, and it tells an unknown call from one still going.
+  - `calls insights` shows the summary, sentiment and topics; `--generate` makes
+    them now (Telenow pays for that, not your org).
+  - `calls trace` summarises the debug timeline (owner or admin keys);
+    `--out trace.json` saves all of it.
+  - `calls recording` lists a call's recordings; `--out` saves one with your key.
+    A transferred call has two, and you pick which with `--recording`.
+  - `calls live` shows how many calls are going on now, per agent.
+- **Exports:** `calls export --out calls.csv` saves the calls as CSV, with the
+  same filters as `calls list` plus channel, disposition, campaign and
+  `--columns` (`calls export-columns` lists them). It says when the server's row
+  limit cut the file short.
+- **Files you ask for** (`--out`) are readable only by you. An existing file is
+  never replaced without `--force`. A download that stalls or ends early leaves
+  nothing behind; a slow one that keeps moving is never cut off.
+- **Chat with an agent by text:**
+  - `telenow chat <agent-id>` is a conversation in your terminal. Type a number to pick
+    one of the options a reply offers.
+  - `telenow chat send <agent-id> --message …` is one turn, for scripts and AI
+    assistants. It ends the session after the reply unless you pass `--keep`;
+    `--session <id>` continues one.
+  - Also `chat messages` and `chat end`.
+  - The session is always ended on the way out, including on Ctrl-C, because an
+    open one keeps counting until it is idle.
+  - A chat runs the agent's tools for real, and the CLI names them. An agent
+    whose follow-up calls are on for chat can phone people from a chat, so the
+    CLI asks first (`--yes` without a terminal).
+  - The CLI chats as an id made from your login, never your name;
+    `--identifier` chats as a given customer.
+- **`telenow models list`**: the providers and models an agent can use, from the
+  platform's catalog (`--kind`, `--provider`, `--full` for prices and limits).
+  `agents create` and `update` now check `llmProvider`, `llmModel`,
+  `sttProvider`, `ttsProvider` and the model in `sttConfig` / `ttsConfig`
+  against it, and name the closest ids on a typo. The server saves an unknown
+  id, which then fails only when a call starts. `--skip-catalog-check` sends it
+  anyway.
+- **Phone numbers:** `numbers list | get | search | providers | requirements |
+  renewal-risk | reclaimable`.
+  - **`numbers buy <+number> --country CC`** repeats the search that showed the
+    number. It buys only if that exact number is still offered, at the price the
+    carrier gives, and never a price you type. It shows the setup fee, the first
+    month and the monthly renewal, then asks (`--yes` without a terminal). A
+    retry with the same `--idempotency-key` buys once.
+  - **`numbers release`** asks first and says it cannot be undone and nothing is
+    refunded. A number on your own carrier account stays yours.
+  - **`numbers reclaim`** buys back a number lost for non-payment. It shows the
+    old price and asks first.
+  - **`numbers assign --agent`** asks first when it would take the number from
+    another agent, or clear its default-outbound flag or inbound action (the
+    server clears both on every assign). It sends nothing when the number is
+    already that agent's.
+  - Also `numbers unassign` (asks), `default-outbound [--off]` and
+    `inbound-action --action … | --clear`.
+  - Sending compliance documents stays in the dashboard.
+- **`telenow prompts pull | diff | push`**: keep an agent's live prompt (and, for
+  a flow agent, its flow) in local files.
+  - `push` checks the prompt with the server first.
+  - It saves only if nobody changed the agent since the pull (`If-Match`).
+  - It refuses while the dashboard holds an unpublished draft.
+  - `pull` never overwrites local edits that were not pushed.
+- **Output:** JSON by default. `--fields a,b.c` picks fields, and
+  `--output table | raw` changes the format. Errors are JSON on stderr, with
+  documented exit codes.
+- **Agents:**
+  - `agents create | update | delete | versions | diff | restore | stats`.
+  - `update` sends only the fields in your file. It merges your `metadata` over
+    the agent's current one, under a version check, because the server replaces
+    `metadata` whole. `--replace-metadata` sends it as is.
+  - Both `create` and `update` warn when a key is snake_case, which the server
+    ignores.
+- **`flows validate --file`:** checks a graph with the server and saves nothing.
+- **`call place`:** dials one person with an agent.
+  - It names the number, the agent and the caller ID, then asks first (or needs
+    `--yes`).
+  - `--queue` lets the server dial within calling hours.
+  - `--var name=value` sets call variables.
+- **Campaigns:**
+  - `campaigns list | get | create` (always a draft).
+  - `add-targets` from a `.csv` or `.json` file. The file is checked first; JSON
+    goes in batches and is deduplicated by each row's `id`.
+  - `start | pause | cancel`: each reads the campaign back to report its real
+    status.
+  - `calls | results | analytics`.
+- **Knowledge bases:** `kb list | get | create | add-doc (--file | --url |
+  --text-file) | docs | attach | detach | delete`.
+  - `kb attach --doc <id>` limits an agent to some documents of a base, and
+    `--whole` widens it back. The server's own routes can only widen by
+    replacing all of the agent's bases, so the CLI keeps the others as they
+    were and reports any difference afterwards.
+  - Plain `kb attach` on a base that is already limited is refused, because
+    the server would silently change nothing. `kb attached` shows each base's
+    documents.
+- **Voices:** `voices list --provider` (filter by `--language`, `--gender`,
+  `--limit`) and `voices clones`.
+- **Do-not-call list:** `dnc list | add | import | remove`.
+- **Webhooks:** `webhooks list | create | test | deliveries | disable | replay`.
+  `replay` sends a past event again. It names the event, its time and your
+  endpoint's host (never its data), and asks first, because your endpoint may
+  act on it twice. A retry with the same `--idempotency-key` sends nothing again,
+  and the CLI says so. `create`
+  checks event names against the server's own list.
+- **Analytics:** `analytics`.
+- **Sub-accounts:** `sub-accounts list | get | usage | create | update |
+  suspend | resume | rotate-key | close`.
+  - **`create` needs a spend limit or `--no-limit` said out loud,** because a
+    sub-account spends from your wallet. It also needs `--key-role`.
+  - **A new key's secret is shown only once,** so it goes where you say:
+    `--save-profile <name>` (a login profile, used with `--profile`),
+    `--key-file <path>` (a new owner-only file), or `--show-key` to print it. It
+    never appears in output otherwise, `--output raw` included. Create and
+    rotate send no idempotency key, so the server never caches the secret;
+    `--external-id` makes a retried create safe instead.
+  - **`suspend` asks first,** because it ends live calls. **`rotate-key` asks
+    first,** because the current keys stop working; `--keep-existing` keeps them.
+    **`close` asks first,** because it cannot be undone.
+- **Safety:**
+  - Anything that dials, spends, deletes or unblocks a number asks first, and
+    needs `--yes` when there is no terminal.
+  - Every change supports `--dry-run`.
+  - Every create sends an `Idempotency-Key`. Pass the same `--idempotency-key`
+    to retry a command safely.
+  - File uploads are the exception: they go without the key. The server's
+    idempotency layer refuses a keyed body over 5 MiB, and knowledge documents
+    may be larger.
+  - `kb add-doc` prints a short view; the server's answer includes the whole
+    document text, so use `--full` to see it.
+- **AI assistants:** `telenow agent-instructions` prints the skill shipped in
+  `skills/telenow-cli/SKILL.md`.
+- **Shell completion:** `telenow completion bash | zsh | fish` prints a completion
+  script, generated from the installed version's own commands (app commands
+  included). Load it with, for example, `source <(telenow completion bash)`.
+
+### Package
+- The account CLI's own type and source-map files are not published (nothing
+  imports them). The library's typings are unchanged. The tarball is about
+  130 kB.
+- CI tests on Node 20, 22 and 24 (Node 18 is dropped, matching `engines`) and
+  runs the CLI's tests. The release workflow runs them too before it publishes.
+
+### Requirements
+- **Node 20 or newer** (was 18). Node 18 is end-of-life, and its built-in `fetch`
+  is still marked experimental.
+
 ## 0.6.0
 
 ### Agent configuration

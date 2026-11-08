@@ -1,7 +1,7 @@
 {
   "name": "telenow",
   "version": "0.6.0",
-  "description": "Telenow App Platform SDK \u2014 build installable apps for the Telenow voice AI dashboard: a React UI that renders in the dashboard, verify signed agent tool calls & event webhooks, and read/write your app's data. Includes the `telenow build` packaging CLI.",
+  "description": "Telenow App Platform SDK and CLI \u2014 build installable apps for the Telenow voice AI dashboard (a React UI that renders in the dashboard, verify signed agent tool calls & event webhooks, read/write your app's data), and work with your Telenow account from a terminal: `telenow login`, agents, calls, transcripts, and prompts you pull, edit and push. Includes the `telenow build` packaging command.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -25,21 +25,26 @@
   },
   "files": [
     "dist",
+    "!dist/cli/**/*.d.ts",
+    "!dist/cli/**/*.map",
     "bin",
+    "skills",
     "telenow.app.schema.json",
     "README.md"
   ],
   "sideEffects": false,
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "npm run build && node --test test/cli/*.test.mjs"
   },
   "keywords": [
     "telenow",
+    "cli",
     "voice-ai",
     "app-platform",
     "marketplace",

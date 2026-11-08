@@ -1,7 +1,8 @@
 name: CI
 
-# Type-check + build the SDK and smoke-test the `telenow` CLI on every push/PR,
-# so a broken build never reaches a release tag.
+# Type-check + build the SDK, run the CLI's tests and smoke-test the `telenow` command on every
+# push/PR, so a broken build never reaches a release tag.
+# Node: the versions package.json's `engines` allows (>=20) that are still released.
 on:
   push:
     branches: [main]
@@ -12,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [18, 20, 22]
+        node: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,7 +23,25 @@ jobs:
       - run: npm ci
       - name: Type-check + build (tsc)
         run: npm run build
-      - name: Smoke-test the CLI (loads + prints its usage banner)
-        run: node bin/telenow.mjs --help 2>&1 | grep -q "telenow build"
+      - name: CLI tests (account commands against a local mock server; nothing leaves the runner)
+        run: node --test test/cli/*.test.mjs
+      - name: Smoke-test the CLI (loads + lists both app and account commands)
+        run: |
+          node bin/telenow.mjs --help > help.txt 2>&1
+          grep -q "telenow build" help.txt
+          grep -q "telenow login" help.txt
       - name: Pack (verify the published tarball contents)
-        run: npm pack --dry-run
+        run: |
+          npm pack --dry-run --json > pack.json
+          node -e '
+            const files = require("./pack.json")[0].files.map((f) => f.path);
+            const bad = files.filter((f) => f.startsWith("dist/cli/") && /\.(d\.ts|map)$/.test(f));
+            const need = ["bin/telenow.mjs", "dist/cli/main.js", "skills/telenow-cli/SKILL.md", "dist/index.d.ts"];
+            const missing = need.filter((f) => !files.includes(f));
+            const leaked = files.filter((f) => f.startsWith("src/") || f.startsWith("test/"));
+            if (bad.length || missing.length || leaked.length) {
+              console.error({ bad, missing, leaked });
+              process.exit(1);
+            }
+            console.log(files.length + " files, as expected");
+          '
