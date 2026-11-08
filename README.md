@@ -120,6 +120,45 @@ npx telenow build             # validate, bundle the React UI, → <appId>-<vers
 
 **`telenow build`** validates first, then bundles your React UI (with an **inline sourcemap** + preserved component names, so the in-dashboard error overlay and your browser DevTools show real `.tsx` file:line), inlines the README, collects screenshots, and writes the uploadable ZIP. Upload it in **Apps → Upload app zip** (private to your org) or **Publish to marketplace** for review.
 
+### Your account from the terminal
+
+The same `telenow` command also works with your Telenow account, with an org API key. It is
+built for scripts, CI and AI coding assistants as much as for people.
+
+```bash
+npm install -g telenow
+telenow login                        # opens the browser: check the code, approve. CI: TELENOW_API_KEY
+telenow agents list
+telenow calls transcript <call-id>   # one line per turn
+telenow calls cost <call-id>         # what it was charged; also insights, trace, recording
+telenow calls export --out calls.csv --from 2026-11-01
+telenow models list --kind llm       # the ids agents create/update check against
+telenow chat <agent-id>              # talk to it in the terminal; scripts: chat send --message
+telenow numbers search --country US --pattern 415   # then: numbers buy <+number> --country US (asks first)
+telenow sub-accounts create --name "Acme" --monthly-limit 50 --key-role admin --save-profile acme
+telenow prompts pull <agent-id>      # → .telenow/agents/<id>/prompt.md (and flow.json)
+telenow prompts diff <agent-id>
+telenow prompts push <agent-id>      # checked by the server, saved only if nobody changed it since
+```
+
+- **Signing in:** `telenow login` opens the dashboard in your browser. You check that the code
+  matches the terminal, pick the org and the key's role, and approve. The CLI then saves a new
+  org API key made for this computer, listed with your other keys as `telenow CLI — <computer>
+  — <date>`. Keys made this way expire; the CLI says when.
+  - Over SSH or in a container it prints the link instead (`--no-browser` asks for that), so
+    you can open it on any device.
+  - `telenow login --key` asks for an existing key; `--key-stdin` reads one from stdin.
+  - `telenow logout --revoke` revokes this computer's key on the server.
+- **Output:** JSON on stdout. `--fields a,b.c` picks fields; `--output table` is for people.
+  Errors are JSON on stderr, with fixed exit codes.
+- **Safety:** anything that dials, spends or deletes asks first, and needs `--yes` when there
+  is no terminal. Every change supports `--dry-run`.
+- **AI assistants:** `telenow agent-instructions` prints how one should use the CLI, to paste
+  into `AGENTS.md` or `CLAUDE.md`.
+- **Help:** `telenow --help` lists every command.
+- **Tab completion:** `source <(telenow completion bash)` (or `zsh`; for fish, write
+  `telenow completion fish` to `~/.config/fish/completions/telenow.fish`).
+
 ## External apps (server-side)
 
 Node 18+. Zero runtime dependencies.
