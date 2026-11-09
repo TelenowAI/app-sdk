@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.7.0)
+## 0.7.0
 
 ### Account commands in the `telenow` command
 The `telenow` command now also works with your Telenow account, with an org API key.
