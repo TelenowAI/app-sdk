@@ -167,7 +167,7 @@ Every app command (`app init`, `dev`, `validate`, `build`) works exactly as befo
 ### Package
 - The account CLI's own type and source-map files are not published (nothing
   imports them). The library's typings are unchanged. The tarball is about
-  130 kB.
+  186 kB.
 - CI tests on Node 20, 22 and 24 (Node 18 is dropped, matching `engines`) and
   runs the CLI's tests. The release workflow runs them too before it publishes.
 
